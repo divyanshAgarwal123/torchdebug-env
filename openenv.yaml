@@ -1,0 +1,13 @@
+spec_version: 1
+name: torchdebug_env
+description: Real-world PyTorch training run debugging environment with progressive tasks and deterministic graders.
+version: 1.0.0
+type: space
+runtime: fastapi
+app: server.app:app
+port: 8000
+tags:
+	- openenv
+	- pytorch
+	- debugging
+	- reinforcement-learning

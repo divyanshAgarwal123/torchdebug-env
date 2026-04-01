@@ -1,0 +1,22 @@
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+
+# Test/cache tooling
+.pytest_cache/
+.coverage
+
+# Build artifacts
+*.egg-info/
+
+# Local env/config
+.env
+.venv/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Keep evaluation artifacts, ignore noisy logs
+outputs/logs/*
+!outputs/logs/.gitkeep

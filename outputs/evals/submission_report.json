@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-04-01T19:14:56.315241+00:00",
+  "status": "passed",
+  "checks": {
+    "openenv_validate": true,
+    "local_smoke": true,
+    "tests": true,
+    "docker_smoke": true,
+    "baseline": true
+  },
+  "options": {
+    "docker": true,
+    "baseline": true,
+    "skip_tests": false,
+    "baseline_timeout": 1200,
+    "docker_image": "torchdebug-env-local"
+  },
+  "environment": {
+    "python": "/Volumes/MacTech/MetaHackathon/.venv/bin/python",
+    "cwd": "/Volumes/MacTech/MetaHackathon/torchdebug_env"
+  }
+}
