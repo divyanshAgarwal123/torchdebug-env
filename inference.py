@@ -318,12 +318,14 @@ def run_episode(
     scenario_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a single debugging episode."""
+    scenario = scenario_id or "random"
     print(
-        f"[START] task_id={task_id} "
-        f"scenario_id={scenario_id or 'random'} "
+        f"[START] task={task_id} "
+        f"scenario={scenario} "
         f"model={MODEL_NAME} "
         f"api_base_url={API_BASE_URL} "
-        f"env_base_url={ENV_BASE_URL}"
+        f"env_base_url={ENV_BASE_URL}",
+        flush=True,
     )
 
     # Reset environment
@@ -355,12 +357,13 @@ def run_episode(
         total_reward = reward  # Final reward replaces
 
         print(
-            f"[STEP] task_id={task_id} "
-            f"scenario_id={scenario_id or 'random'} "
+            f"[STEP] task={task_id} "
+            f"scenario={scenario} "
             f"step={steps} "
-            f"action_type={action_type} "
+            f"action={action_type} "
             f"reward={float(reward):.6f} "
-            f"done={str(bool(done)).lower()}"
+            f"done={str(bool(done)).lower()}",
+            flush=True,
         )
 
         # Format new observation
@@ -369,10 +372,11 @@ def run_episode(
         history.append({"role": "user", "content": obs_text[:2000]})
 
     print(
-        f"[END] task_id={task_id} "
-        f"scenario_id={scenario_id or 'random'} "
+        f"[END] task={task_id} "
+        f"scenario={scenario} "
         f"score={float(total_reward):.6f} "
-        f"steps={steps}"
+        f"steps={steps}",
+        flush=True,
     )
     return {
         "task_id": task_id,
@@ -438,7 +442,11 @@ def main():
             f,
             indent=2,
         )
-    print(f"[END] summary average_score={float(avg):.6f} total_scenarios={len(results)} output_path={output_path}")
+    print(
+        f"[END] task=summary score={float(avg):.6f} "
+        f"steps={len(results)} output_path={output_path}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
