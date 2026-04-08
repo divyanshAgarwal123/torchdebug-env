@@ -6,6 +6,8 @@ colorTo: blue
 sdk: docker
 app_port: 8000
 pinned: false
+tags:
+    - openenv
 ---
 
 # 🔥 TorchDebug — PyTorch Training Run Debugger
@@ -254,3 +256,28 @@ Built for the **Meta PyTorch OpenEnv Hackathon × Scaler School** (Round 1).
 - [ ] `python presubmit.py --baseline` passes with valid API credentials
 - [ ] `outputs/evals/baseline_results.json` is generated and committed (or attached)
 - [ ] Hugging Face Space is deployed and responds to `/health` and `/reset`
+
+## 📨 Submission Portal Inputs
+
+Use these exact links in the hackathon submission form:
+
+- GitHub Repository URL: `https://github.com/<your-username>/<your-repo>`
+- Hugging Face Space URL: `https://huggingface.co/spaces/b4rty/torchdebug-env`
+
+Optional live runtime URL (for your own checks):
+
+- `https://b4rty-torchdebug-env.hf.space`
+
+## 🧾 Final One-Command Validation
+
+After setting env vars (`API_BASE_URL`, `MODEL_NAME`, `HF_TOKEN`), run:
+
+```bash
+python presubmit.py --docker --baseline
+bash scripts/validate-submission.sh https://b4rty-torchdebug-env.hf.space .
+```
+
+This generates/updates:
+
+- [outputs/evals/submission_report.json](outputs/evals/submission_report.json)
+- [outputs/evals/baseline_results.json](outputs/evals/baseline_results.json)

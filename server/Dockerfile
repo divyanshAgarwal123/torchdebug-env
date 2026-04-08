@@ -20,19 +20,14 @@ RUN if ! command -v uv >/dev/null 2>&1; then \
         mv /root/.local/bin/uvx /usr/local/bin/uvx; \
     fi
 
+ENV UV_LINK_MODE=copy
+
 # Install git for building from git repos
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ -f uv.lock ]; then \
-        uv sync --frozen --no-install-project --no-editable; \
-    else \
-        uv sync --no-install-project --no-editable; \
-    fi
-
+# Install dependencies + project into local virtualenv
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ -f uv.lock ]; then \
         uv sync --frozen --no-editable; \
@@ -54,6 +49,8 @@ COPY --from=builder /app/env /app/env
 # Set PATH and PYTHONPATH
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/env:$PYTHONPATH"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

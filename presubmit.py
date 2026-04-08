@@ -87,7 +87,7 @@ def write_report(report: dict) -> Path:
     return out_file
 
 
-def check_docker_smoke(image: str) -> None:
+def check_docker_smoke(image: str, keep_running: bool = False) -> bool:
     run_cmd(f"docker build -f server/Dockerfile -t {image} .", cwd=ROOT, timeout=1800)
     run_cmd(f"docker rm -f {image}-ctr >/dev/null 2>&1 || true", cwd=ROOT, timeout=30)
     run_cmd(f"docker run --rm -d -p 8000:8000 --name {image}-ctr {image}", cwd=ROOT, timeout=60)
@@ -101,8 +101,17 @@ def check_docker_smoke(image: str) -> None:
             cwd=ROOT,
             timeout=30,
         )
+        if keep_running:
+            return True
     finally:
-        run_cmd(f"docker stop {image}-ctr >/dev/null 2>&1 || true", cwd=ROOT, timeout=30)
+        if not keep_running:
+            run_cmd(f"docker stop {image}-ctr >/dev/null 2>&1 || true", cwd=ROOT, timeout=30)
+
+    return False
+
+
+def stop_docker_container(image: str) -> None:
+    run_cmd(f"docker stop {image}-ctr >/dev/null 2>&1 || true", cwd=ROOT, timeout=30)
 
 
 def check_baseline(timeout_s: int) -> None:
@@ -139,6 +148,7 @@ def main() -> int:
         "docker_smoke": None if not args.docker else False,
         "baseline": None if not args.baseline else False,
     }
+    docker_kept_running = False
 
     try:
         check_openenv_validate()
@@ -152,10 +162,13 @@ def main() -> int:
             checks["tests"] = True if tests_ok else "skipped"
 
         if args.docker:
-            check_docker_smoke(args.docker_image)
+            keep_running = args.baseline and not os.environ.get("ENV_BASE_URL")
+            docker_kept_running = check_docker_smoke(args.docker_image, keep_running=keep_running)
             checks["docker_smoke"] = True
 
         if args.baseline:
+            if docker_kept_running and not os.environ.get("ENV_BASE_URL"):
+                os.environ["ENV_BASE_URL"] = "http://localhost:8000"
             check_baseline(args.baseline_timeout)
             checks["baseline"] = True
 
@@ -165,6 +178,12 @@ def main() -> int:
         print(f"\n❌ Presubmit failed: {e}")
         status = "failed"
         exit_code = 1
+    finally:
+        if docker_kept_running:
+            try:
+                stop_docker_container(args.docker_image)
+            except Exception:
+                pass
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

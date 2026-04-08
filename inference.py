@@ -239,10 +239,10 @@ def get_llm_action(client: OpenAI, observation: str, history: list) -> Dict:
 
     except json.JSONDecodeError:
         # Fallback: try to extract action_type
-        print(f"  [WARN] Could not parse JSON, attempting fallback")
+        print("[WARN] llm_json_parse_failed fallback=analyze_logs", file=sys.stderr)
         return {"action_type": "analyze_logs"}
     except Exception as e:
-        print(f"  [ERROR] LLM call failed: {e}")
+        print(f"[ERROR] llm_call_failed error={e}", file=sys.stderr)
         return {"action_type": "analyze_logs"}
 
 
@@ -318,15 +318,17 @@ def run_episode(
     scenario_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a single debugging episode."""
-    print(f"\n{'='*60}")
-    print(f"  Task: {task_id} | Scenario: {scenario_id or 'random'}")
-    print(f"{'='*60}")
+    print(
+        f"[START] task_id={task_id} "
+        f"scenario_id={scenario_id or 'random'} "
+        f"model={MODEL_NAME} "
+        f"api_base_url={API_BASE_URL} "
+        f"env_base_url={ENV_BASE_URL}"
+    )
 
     # Reset environment
     reset_data = env_client.reset(task_id=task_id, scenario_id=scenario_id)
     obs_text = format_observation(reset_data)
-    print(f"\n  📋 Scenario loaded. Beginning investigation...\n")
-
     history = []
     done = False
     total_reward = 0.0
@@ -339,14 +341,6 @@ def run_episode(
         llm_action = get_llm_action(llm_client, obs_text, history)
         action = choose_action_with_fallback(steps, llm_action, obs_text)
         action_type = action.get("action_type", "analyze_logs")
-        print(f"  Step {steps}: 🔧 {action_type}", end="")
-
-        if action_type == "diagnose":
-            print(f" → \"{action.get('diagnosis', '')[:60]}...\"")
-        elif action_type == "prescribe_fix":
-            print(f" → \"{action.get('fix_description', '')[:60]}...\"")
-        else:
-            print()
 
         # Add to conversation history
         history.append({"role": "assistant", "content": json.dumps(action)})
@@ -360,18 +354,26 @@ def run_episode(
         done = step_data.get("done", obs_metadata.get("done", False))
         total_reward = reward  # Final reward replaces
 
+        print(
+            f"[STEP] task_id={task_id} "
+            f"scenario_id={scenario_id or 'random'} "
+            f"step={steps} "
+            f"action_type={action_type} "
+            f"reward={float(reward):.6f} "
+            f"done={str(bool(done)).lower()}"
+        )
+
         # Format new observation
         obs_text = format_observation(step_data)
 
-        # Show feedback
-        feedback = obs_metadata.get("feedback", "")
-        if feedback:
-            for line in feedback.split("\n")[:3]:
-                print(f"        {line}")
-
         history.append({"role": "user", "content": obs_text[:2000]})
 
-    print(f"\n  🏁 Episode complete! Score: {total_reward:.3f}/1.0 in {steps} steps")
+    print(
+        f"[END] task_id={task_id} "
+        f"scenario_id={scenario_id or 'random'} "
+        f"score={float(total_reward):.6f} "
+        f"steps={steps}"
+    )
     return {
         "task_id": task_id,
         "scenario_id": scenario_id,
@@ -382,28 +384,17 @@ def run_episode(
 
 def main():
     """Run the baseline evaluation across all tasks."""
-    print("╔══════════════════════════════════════════════╗")
-    print("║   TorchDebug — PyTorch Training Debugger     ║")
-    print("║   Baseline Inference Script                  ║")
-    print("╚══════════════════════════════════════════════╝")
-    print(f"\n  LLM: {MODEL_NAME}")
-    print(f"  API: {API_BASE_URL}")
-    print(f"  ENV: {ENV_BASE_URL}\n")
-
     # Create clients
     env_client = TorchDebugClient(ENV_BASE_URL)
     llm_client = create_llm_client()
 
     # Wait for environment to be ready
-    print("  Waiting for environment server...", end="", flush=True)
     for _ in range(30):
         if env_client.health():
-            print(" ✅")
             break
         time.sleep(2)
-        print(".", end="", flush=True)
     else:
-        print("\n  ❌ Environment server not reachable!")
+        print("[ERROR] env_server_unreachable", file=sys.stderr)
         sys.exit(1)
 
     # Run one deterministic scenario from each required task (easy/medium/hard)
@@ -421,29 +412,13 @@ def main():
     finally:
         env_client.close()
 
-    # Summary
-    print(f"\n{'='*60}")
-    print(f"  RESULTS SUMMARY")
-    print(f"{'='*60}")
-    print(f"  {'Task':<25} {'Scenario':<30} {'Score':<8} {'Steps':<6}")
-    print(f"  {'-'*25} {'-'*30} {'-'*8} {'-'*6}")
-
     total = 0.0
     by_task = collections.defaultdict(list)
     for r in results:
-        print(f"  {r['task_id']:<25} {r['scenario_id']:<30} {r['score']:<8.3f} {r['steps']:<6}")
         total += r['score']
         by_task[r["task_id"]].append(r["score"])
 
     avg = total / len(results) if results else 0
-    print(f"\n  Average Score: {avg:.3f}/1.0")
-    print(f"  Total Scenarios: {len(results)}")
-
-    print("\n  Per-task Averages:")
-    for task_id in ["basic_failures", "performance_issues", "subtle_bugs"]:
-        task_scores = by_task.get(task_id, [])
-        task_avg = sum(task_scores) / len(task_scores) if task_scores else 0.0
-        print(f"    - {task_id}: {task_avg:.3f}")
 
     # Save results
     output_path = "outputs/evals/baseline_results.json"
@@ -463,7 +438,7 @@ def main():
             f,
             indent=2,
         )
-    print(f"  Results saved to {output_path}")
+    print(f"[END] summary average_score={float(avg):.6f} total_scenarios={len(results)} output_path={output_path}")
 
 
 if __name__ == "__main__":
