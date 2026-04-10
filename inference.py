@@ -410,12 +410,11 @@ def _format_error(error_value: Any) -> str:
 def _strict_open_score(value: float | int | None) -> float:
     """Clamp any score to the strict open interval (0, 1)."""
     v = float(0.0 if value is None else value)
-    eps = 1e-6
     if v <= 0.0:
-        return eps
+        return 0.01
     if v >= 1.0:
-        return 1.0 - eps
-    return v
+        return 0.99
+    return max(0.01, min(0.99, v))
 
 
 # =============================================================================

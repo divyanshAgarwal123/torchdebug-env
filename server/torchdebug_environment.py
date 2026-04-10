@@ -81,7 +81,7 @@ MAX_STEPS = {
     "hard": 20,
 }
 
-STRICT_SCORE_EPS = 1e-6
+STRICT_SCORE_EPS = 0.01
 
 AVAILABLE_ACTIONS = [
     "analyze_logs",
