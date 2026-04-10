@@ -14,6 +14,16 @@ except ImportError:
     from scenarios import BugScenario
 
 
+def _strict_open_unit(value: float) -> float:
+    """Clamp score to strict open interval (0, 1)."""
+    v = float(value)
+    if v <= 0.0:
+        return 1e-6
+    if v >= 1.0:
+        return 1.0 - 1e-6
+    return v
+
+
 def compute_investigation_reward(
     action_type: str,
     scenario: BugScenario,
@@ -90,14 +100,14 @@ def grade_diagnosis(
     - 0.0: No match
     """
     if not diagnosis:
-        return 0.0
+        return _strict_open_unit(0.0)
 
     # Check exact category match
     if scenario.root_cause_category.lower() in diagnosis.lower().replace(" ", "_"):
-        return 1.0
+        return _strict_open_unit(1.0)
 
     # Fuzzy keyword matching
-    return fuzzy_keyword_match(diagnosis, scenario.diagnosis_keywords)
+    return _strict_open_unit(fuzzy_keyword_match(diagnosis, scenario.diagnosis_keywords))
 
 
 def grade_fix(
@@ -111,7 +121,7 @@ def grade_fix(
     Returns a score between 0.0 and 1.0.
     """
     if not fix_description:
-        return 0.0
+        return _strict_open_unit(0.0)
 
     score = 0.0
 
@@ -127,7 +137,7 @@ def grade_fix(
         # If no code expected/provided, scale description score to 100%
         score = desc_score
 
-    return min(score, 1.0)
+    return _strict_open_unit(min(score, 1.0))
 
 
 def compute_episode_score(
