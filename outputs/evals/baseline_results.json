@@ -3,30 +3,30 @@
     {
       "task_id": "basic_failures",
       "scenario_id": "easy_lr_too_high",
-      "score": 0.0,
-      "steps": 1,
+      "score": 0.9500000000000002,
+      "steps": 4,
       "success": true
     },
     {
       "task_id": "performance_issues",
       "scenario_id": "med_data_leakage",
-      "score": 0.0,
-      "steps": 1,
+      "score": 0.8300000000000001,
+      "steps": 4,
       "success": true
     },
     {
       "task_id": "subtle_bugs",
       "scenario_id": "hard_ddp_grad_accum",
-      "score": 0.0,
-      "steps": 1,
+      "score": 0.9800000000000001,
+      "steps": 4,
       "success": true
     }
   ],
-  "average_score": 0.0,
+  "average_score": 0.92,
   "task_scores": {
-    "basic_failures": 0.0,
-    "performance_issues": 0.0,
-    "subtle_bugs": 0.0
+    "basic_failures": 0.9500000000000002,
+    "performance_issues": 0.8300000000000001,
+    "subtle_bugs": 0.9800000000000001
   },
   "model": "Qwen/Qwen2.5-72B-Instruct",
   "api_base_url": "https://router.huggingface.co/v1"

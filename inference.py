@@ -39,6 +39,7 @@ ENV_NAME = "torchdebug_env"
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4")
 HF_TOKEN = os.getenv("HF_TOKEN")
+LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "20"))
 
 # Optional (for docker-image based evaluation flows)
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
@@ -50,16 +51,43 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 import requests
 
+try:
+    from client import TorchDebugEnv, TorchDebugAction
+except ImportError:
+    from torchdebug_env.client import TorchDebugEnv
+    from torchdebug_env.models import TorchDebugAction
+
 
 class TorchDebugClient:
-    """HTTP client wrapper for the TorchDebug environment."""
+    """Stateful client wrapper for the TorchDebug environment."""
 
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
+        self.env = None
+        try:
+            self.env = TorchDebugEnv(base_url=self.base_url).sync()
+        except Exception:
+            self.env = None
 
     def reset(self, task_id: str = "basic_failures", scenario_id: Optional[str] = None) -> Dict:
         """Reset the environment with a specific task/scenario."""
+        if self.env is not None:
+            try:
+                result = self.env.reset(task_id=task_id, scenario_id=scenario_id)
+                obs = result.observation.model_dump()
+                return {
+                    "observation": obs,
+                    "reward": result.reward if result.reward is not None else obs.get("reward", 0.0),
+                    "done": result.done,
+                }
+            except Exception:
+                pass
+
+        return self._reset_http(task_id=task_id, scenario_id=scenario_id)
+
+    def _reset_http(self, task_id: str, scenario_id: Optional[str]) -> Dict:
+        """HTTP fallback reset for compatibility."""
         payload: Dict[str, Any] = {"task_id": task_id}
         if scenario_id:
             payload["scenario_id"] = scenario_id
@@ -75,7 +103,7 @@ class TorchDebugClient:
         }
 
     def step(self, action: Dict) -> Dict:
-        """Take a typed OpenEnv step."""
+        """Take a step in the active episode."""
         action_payload = {
             "action_type": action.get("action_type", "analyze_logs"),
             "diagnosis": action.get("diagnosis", ""),
@@ -83,6 +111,31 @@ class TorchDebugClient:
             "fix_code": action.get("fix_code", ""),
             "parameters": action.get("parameters", {}),
         }
+
+        if self.env is not None:
+            try:
+                result = self.env.step(
+                    TorchDebugAction(
+                        action_type=action_payload["action_type"],
+                        diagnosis=action_payload["diagnosis"] or None,
+                        fix_description=action_payload["fix_description"] or None,
+                        fix_code=action_payload["fix_code"] or None,
+                        parameters=action_payload["parameters"] or {},
+                    )
+                )
+                obs = result.observation.model_dump()
+                return {
+                    "observation": obs,
+                    "reward": result.reward if result.reward is not None else obs.get("reward", 0.0),
+                    "done": result.done,
+                }
+            except Exception:
+                pass
+
+        return self._step_http(action_payload)
+
+    def _step_http(self, action_payload: Dict[str, Any]) -> Dict:
+        """HTTP fallback step for compatibility."""
 
         # Preferred: typed action contract
         step_payload = {"action": action_payload}
@@ -101,15 +154,24 @@ class TorchDebugClient:
         resp.raise_for_status()
         data = resp.json()
         obs = data.get("observation", data)
+        legacy_wrapped = False
 
         # If legacy call-tool observation is returned, unwrap tool_result
         if isinstance(obs, dict) and "tool_result" in obs and isinstance(obs.get("tool_result"), dict):
             obs = obs["tool_result"]
+            legacy_wrapped = True
+
+        if legacy_wrapped:
+            reward_value = obs.get("reward", data.get("reward", 0.0))
+            done_value = obs.get("done", data.get("done", False))
+        else:
+            reward_value = data.get("reward", obs.get("reward", 0.0))
+            done_value = data.get("done", obs.get("done", False))
 
         return {
             "observation": obs,
-            "reward": data.get("reward", obs.get("reward", 0.0)),
-            "done": data.get("done", obs.get("done", False)),
+            "reward": reward_value,
+            "done": done_value,
         }
 
     def health(self) -> bool:
@@ -121,7 +183,12 @@ class TorchDebugClient:
             return False
 
     def close(self) -> None:
-        """Close the HTTP session."""
+        """Close client resources."""
+        try:
+            if self.env is not None:
+                self.env.close()
+        except Exception:
+            pass
         try:
             self.session.close()
         except Exception:
@@ -242,6 +309,7 @@ def get_llm_action(client: OpenAI, observation: str, history: list) -> Dict:
             messages=messages,
             max_tokens=800,
             temperature=0.0,
+            timeout=LLM_TIMEOUT_SEC,
         )
         response_text = completion.choices[0].message.content.strip()
 

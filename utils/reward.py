@@ -195,7 +195,15 @@ def compute_episode_score(
         score = min(score, 0.55)
 
     # Difficulty multiplier for display (score is already 0-1 per task)
-    return max(0.0, min(1.0, score))
+    bounded = max(0.0, min(1.0, score))
+
+    # Hackathon validator requires strict open interval: 0 < score < 1
+    eps = 1e-6
+    if bounded <= 0.0:
+        return eps
+    if bounded >= 1.0:
+        return 1.0 - eps
+    return bounded
 
 
 def get_hint(scenario: BugScenario, hint_number: int) -> str:

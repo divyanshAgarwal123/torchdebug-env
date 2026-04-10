@@ -7,7 +7,10 @@ from typing import Any, Dict
 from openenv.core.client_types import StepResult
 from openenv.core.env_client import EnvClient
 
-from .models import TorchDebugAction, TorchDebugObservation, TorchDebugState
+try:
+    from .models import TorchDebugAction, TorchDebugObservation, TorchDebugState
+except ImportError:
+    from models import TorchDebugAction, TorchDebugObservation, TorchDebugState
 
 
 class TorchDebugEnv(EnvClient[TorchDebugAction, TorchDebugObservation, TorchDebugState]):
