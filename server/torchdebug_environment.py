@@ -81,6 +81,8 @@ MAX_STEPS = {
     "hard": 20,
 }
 
+STRICT_SCORE_EPS = 1e-6
+
 AVAILABLE_ACTIONS = [
     "analyze_logs",
     "inspect_gradients",
@@ -151,7 +153,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
                     available_actions=AVAILABLE_ACTIONS,
                     feedback=f"Scenario '{scenario_id}' not found",
                     done=True,
-                    reward=0.0,
+                    reward=STRICT_SCORE_EPS,
                 )
         else:
             scenarios_list = get_scenarios(task_id)
@@ -165,7 +167,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
                     available_actions=AVAILABLE_ACTIONS,
                     feedback=f"No scenarios for task '{task_id}'",
                     done=True,
-                    reward=0.0,
+                    reward=STRICT_SCORE_EPS,
                 )
             scenario = random.choice(scenarios_list)
 
@@ -236,7 +238,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
                 available_actions=AVAILABLE_ACTIONS,
                 feedback="Error: Call reset() first.",
                 done=True,
-                reward=0.0,
+                reward=STRICT_SCORE_EPS,
             )
 
         self._state.step_count += 1

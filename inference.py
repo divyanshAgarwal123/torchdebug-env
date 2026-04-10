@@ -407,6 +407,17 @@ def _format_error(error_value: Any) -> str:
     return str(error_value).replace("\n", " ")
 
 
+def _strict_open_score(value: float | int | None) -> float:
+    """Clamp any score to the strict open interval (0, 1)."""
+    v = float(0.0 if value is None else value)
+    eps = 1e-6
+    if v <= 0.0:
+        return eps
+    if v >= 1.0:
+        return 1.0 - eps
+    return v
+
+
 # =============================================================================
 # Main Evaluation Loop
 # =============================================================================
@@ -491,7 +502,7 @@ def run_episode(
     return {
         "task_id": task_id,
         "scenario_id": scenario_id,
-        "score": total_reward,
+        "score": _strict_open_score(total_reward),
         "steps": steps,
         "success": success,
     }
