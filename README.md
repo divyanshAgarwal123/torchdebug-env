@@ -31,17 +31,20 @@ The agent must investigate (analyze logs, inspect gradients, check architecture)
 
 ## 🏗️ Architecture
 
+Reference-inspired layout (aligned with strong OpenEnv environments such as calendar/reasoning_gym/repl/tbench2):
+
 ```
 torchdebug_env/
+├── ARCHITECTURE.md       # Design and layering notes
 ├── openenv.yaml          # OpenEnv manifest
 ├── pyproject.toml         # Dependencies
 ├── models.py              # Pydantic Action/Observation/State models
-├── client.py              # MCPToolClient subclass
+├── client.py              # Typed EnvClient wrapper
 ├── inference.py           # Baseline LLM agent script
 ├── __init__.py
 ├── server/
 │   ├── app.py             # FastAPI server entry point
-│   ├── torchdebug_environment.py  # Core MCPEnvironment
+│   ├── torchdebug_environment.py  # Core Environment implementation
 │   └── Dockerfile         # Container build
 ├── scenarios/
 │   ├── __init__.py        # Scenario registry

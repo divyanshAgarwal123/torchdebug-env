@@ -14,7 +14,7 @@ def test_reset_and_step_flow():
 
     assert obs.done is False
     assert obs.reward == 0.0
-    assert obs.metadata["task_id"] == "easy_lr_too_high"
+    assert obs.task_id == "easy_lr_too_high"
 
     o1 = env._process_action(TorchDebugAction(action_type="analyze_logs"))
     assert o1.step_number == 1

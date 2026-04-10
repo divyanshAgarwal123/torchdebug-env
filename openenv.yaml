@@ -7,7 +7,7 @@ runtime: fastapi
 app: server.app:app
 port: 8000
 tags:
-	- openenv
-	- pytorch
-	- debugging
-	- reinforcement-learning
+  - openenv
+  - pytorch
+  - debugging
+  - reinforcement-learning

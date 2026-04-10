@@ -1,34 +1,22 @@
-"""
-TorchDebug Environment — PyTorch Training Run Debugger.
+"""TorchDebug environment package exports."""
 
-An OpenEnv environment for diagnosing and fixing broken PyTorch training runs.
-Agents must investigate training logs, inspect code, diagnose root causes, 
-and prescribe fixes for common ML engineering failures.
+from __future__ import annotations
 
-Tasks:
-    - basic_failures (easy): Common crashes — device mismatch, NaN loss, wrong loss
-    - performance_issues (medium): Subtle issues — data leakage, vanishing gradients
-    - subtle_bugs (hard): Compound bugs — DDP interactions, mixed precision, FSDP
+from typing import Any
 
-Example:
-    >>> from torchdebug_env import TorchDebugEnv
-    >>>
-    >>> with TorchDebugEnv(base_url="http://localhost:8000") as env:
-    ...     env.reset()
-    ...     tools = env.list_tools()
-    ...     result = env.call_tool("get_observation")
-    ...     result = env.call_tool("take_action", action_type="analyze_logs")
-"""
+from .models import TorchDebugAction, TorchDebugObservation, TorchDebugState
 
-try:
-    from openenv.core.env_server.mcp_types import CallToolAction, ListToolsAction
-except ImportError:  # pragma: no cover
-    CallToolAction = None
-    ListToolsAction = None
+__all__ = [
+    "TorchDebugAction",
+    "TorchDebugObservation",
+    "TorchDebugState",
+    "TorchDebugEnv",
+]
 
-try:
-    from .client import TorchDebugEnv
-except ImportError:  # pragma: no cover
-    TorchDebugEnv = None
 
-__all__ = ["TorchDebugEnv", "CallToolAction", "ListToolsAction"]
+def __getattr__(name: str) -> Any:
+    if name == "TorchDebugEnv":
+        from .client import TorchDebugEnv as _TorchDebugEnv
+
+        return _TorchDebugEnv
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

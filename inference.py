@@ -23,7 +23,6 @@ Usage:
 """
 
 import collections
-import asyncio
 import json
 import os
 import sys
@@ -50,48 +49,48 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 # =============================================================================
 
 import requests
-from client import TorchDebugEnv as MCPTorchDebugEnv
 
 
 class TorchDebugClient:
-    """Stateful MCP client wrapper for the TorchDebug environment."""
+    """HTTP client wrapper for the TorchDebug environment."""
 
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
-        self.env = MCPTorchDebugEnv(base_url=self.base_url)
-        self._loop = asyncio.new_event_loop()
-
-    def _run(self, coro):
-        return self._loop.run_until_complete(coro)
 
     def reset(self, task_id: str = "basic_failures", scenario_id: Optional[str] = None) -> Dict:
-        """Reset the environment with a specific task (stateful MCP session)."""
-        kwargs = {"task_id": task_id}
+        """Reset the environment with a specific task/scenario."""
+        payload: Dict[str, Any] = {"task_id": task_id}
         if scenario_id:
-            kwargs["scenario_id"] = scenario_id
-        self._run(self.env.reset(**kwargs))
-        obs = self._run(self.env.call_tool("get_observation"))
+            payload["scenario_id"] = scenario_id
+
+        resp = self.session.post(f"{self.base_url}/reset", json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        obs = data.get("observation", data)
         return {
             "observation": obs,
-            "reward": 0.0,
-            "done": False,
+            "reward": data.get("reward", obs.get("reward", 0.0)),
+            "done": data.get("done", obs.get("done", False)),
         }
 
     def step(self, action: Dict) -> Dict:
-        """Take a step by calling the environment's `take_action` tool."""
-        tool_args = {
+        """Take a typed OpenEnv step."""
+        action_payload = {
             "action_type": action.get("action_type", "analyze_logs"),
             "diagnosis": action.get("diagnosis", ""),
             "fix_description": action.get("fix_description", ""),
             "fix_code": action.get("fix_code", ""),
-            "parameters": json.dumps(action.get("parameters", {})),
+            "parameters": action.get("parameters", {}),
         }
-        obs = self._run(self.env.call_tool("take_action", **tool_args))
+        resp = self.session.post(f"{self.base_url}/step", json=action_payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        obs = data.get("observation", data)
         return {
             "observation": obs,
-            "reward": obs.get("reward", 0.0),
-            "done": obs.get("done", False),
+            "reward": data.get("reward", obs.get("reward", 0.0)),
+            "done": data.get("done", obs.get("done", False)),
         }
 
     def health(self) -> bool:
@@ -103,13 +102,9 @@ class TorchDebugClient:
             return False
 
     def close(self) -> None:
-        """Close the MCP client session."""
+        """Close the HTTP session."""
         try:
-            self._run(self.env.close())
-        except Exception:
-            pass
-        try:
-            self._loop.close()
+            self.session.close()
         except Exception:
             pass
 

@@ -10,6 +10,11 @@ Defines typed Action, Observation, and State models for the OpenEnv spec.
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
+try:
+    from openenv.core.env_server.types import Action, Observation, State
+except ImportError:
+    from openenv.core.env_server.types import Action, Observation, State
+
 
 # =============================================================================
 # Sub-models (used within Observation)
@@ -53,7 +58,7 @@ class InspectionResult(BaseModel):
 # Observation Model
 # =============================================================================
 
-class TorchDebugObservation(BaseModel):
+class TorchDebugObservation(Observation):
     """What the agent sees at each step of the debugging episode."""
 
     task_id: str = Field(description="Identifier for the current bug scenario")
@@ -107,7 +112,7 @@ class TorchDebugObservation(BaseModel):
 # Action Model
 # =============================================================================
 
-class TorchDebugAction(BaseModel):
+class TorchDebugAction(Action):
     """What the agent can do at each step."""
 
     action_type: Literal[
@@ -155,11 +160,9 @@ class TorchDebugAction(BaseModel):
 # State Model
 # =============================================================================
 
-class TorchDebugState(BaseModel):
+class TorchDebugState(State):
     """Internal environment state for the debugging episode."""
 
-    episode_id: Optional[str] = Field(default=None, description="Episode identifier")
-    step_count: int = Field(default=0, ge=0, description="Steps taken in this episode")
     task_id: Optional[str] = Field(default=None, description="Current task/scenario ID")
     difficulty: Optional[str] = Field(default=None, description="Current difficulty level")
     diagnosed: bool = Field(default=False, description="Whether a correct diagnosis was made")

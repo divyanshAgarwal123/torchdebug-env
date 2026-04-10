@@ -1,5 +1,5 @@
 """
-TorchDebug Environment — MCPEnvironment implementation.
+TorchDebug Environment implementation.
 
 A real-world OpenEnv environment that simulates debugging broken PyTorch
 training runs. The agent must investigate, diagnose, and prescribe fixes.
@@ -10,9 +10,8 @@ import random
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from openenv.core.env_server.mcp_environment import MCPEnvironment
-from openenv.core.env_server.types import Action, Observation, State
-from fastmcp import FastMCP
+from openenv.core.env_server.interfaces import Environment
+from openenv.core.env_server.types import State
 
 try:
     from ..models import (
@@ -94,7 +93,7 @@ AVAILABLE_ACTIONS = [
 ]
 
 
-class TorchDebugEnvironment(MCPEnvironment):
+class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation, TorchDebugState]):
     """
     PyTorch Training Run Debugger Environment.
 
@@ -110,67 +109,8 @@ class TorchDebugEnvironment(MCPEnvironment):
     """
 
     def __init__(self):
-        """Initialize the environment with MCP tools."""
-        mcp = FastMCP("torchdebug_env")
-
-        @mcp.tool
-        def get_task_info() -> dict:
-            """Get info about all available tasks and their scenarios."""
-            all_scenarios = get_all_scenarios()
-            info = {}
-            for task_id, scenarios_list in all_scenarios.items():
-                info[task_id] = {
-                    "difficulty": TASK_DIFFICULTY_MAP[task_id],
-                    "num_scenarios": len(scenarios_list),
-                    "scenario_ids": [s.scenario_id for s in scenarios_list],
-                }
-            return info
-
-        @mcp.tool
-        def get_observation() -> dict:
-            """Get the current observation (what the agent sees)."""
-            if self._current_obs is None:
-                return {"error": "Environment not initialized. Call reset first."}
-            return self._current_obs.model_dump()
-
-        @mcp.tool
-        def take_action(
-            action_type: str,
-            diagnosis: str = "",
-            fix_description: str = "",
-            fix_code: str = "",
-            parameters: str = "",
-        ) -> dict:
-            """
-            Take a debugging action.
-
-            action_type: One of: analyze_logs, inspect_gradients, inspect_data_pipeline,
-                        inspect_model_architecture, check_device_placement,
-                        diagnose, prescribe_fix, request_hint
-            diagnosis: Root cause diagnosis (for 'diagnose' action)
-            fix_description: Description of the fix (for 'prescribe_fix' action)
-            fix_code: Corrected code (optional, for 'prescribe_fix' action)
-            parameters: JSON string of additional parameters
-            """
-            import json
-            params = {}
-            if parameters:
-                try:
-                    params = json.loads(parameters)
-                except json.JSONDecodeError:
-                    params = {}
-
-            action = TorchDebugAction(
-                action_type=action_type,
-                diagnosis=diagnosis or None,
-                fix_description=fix_description or None,
-                fix_code=fix_code or None,
-                parameters=params,
-            )
-            obs = self._process_action(action)
-            return obs.model_dump()
-
-        super().__init__(mcp)
+        """Initialize environment state."""
+        super().__init__()
         self._state = TorchDebugState(episode_id=str(uuid4()), step_count=0)
         self._current_scenario: Optional[BugScenario] = None
         self._current_obs: Optional[TorchDebugObservation] = None
@@ -184,7 +124,7 @@ class TorchDebugEnvironment(MCPEnvironment):
         seed: Optional[int] = None,
         episode_id: Optional[str] = None,
         **kwargs: Any,
-    ) -> Observation:
+    ) -> TorchDebugObservation:
         """
         Reset the environment with a new scenario.
 
@@ -202,18 +142,30 @@ class TorchDebugEnvironment(MCPEnvironment):
         if scenario_id:
             scenario = get_scenario_by_id(scenario_id)
             if scenario is None:
-                return Observation(
+                return TorchDebugObservation(
+                    task_id=scenario_id,
+                    task_description="Invalid scenario requested",
+                    difficulty="easy",
+                    training_config={},
+                    code_snippet="",
+                    available_actions=AVAILABLE_ACTIONS,
+                    feedback=f"Scenario '{scenario_id}' not found",
                     done=True,
                     reward=0.0,
-                    metadata={"error": f"Scenario '{scenario_id}' not found"},
                 )
         else:
             scenarios_list = get_scenarios(task_id)
             if not scenarios_list:
-                return Observation(
+                return TorchDebugObservation(
+                    task_id=task_id,
+                    task_description="No scenarios available for requested task",
+                    difficulty="easy",
+                    training_config={},
+                    code_snippet="",
+                    available_actions=AVAILABLE_ACTIONS,
+                    feedback=f"No scenarios for task '{task_id}'",
                     done=True,
                     reward=0.0,
-                    metadata={"error": f"No scenarios for task '{task_id}'"},
                 )
             scenario = random.choice(scenarios_list)
 
@@ -267,11 +219,7 @@ class TorchDebugEnvironment(MCPEnvironment):
             reward=0.0,
         )
 
-        return Observation(
-            done=False,
-            reward=0.0,
-            metadata=self._current_obs.model_dump(),
-        )
+        return self._current_obs
 
     def _process_action(self, action: TorchDebugAction) -> TorchDebugObservation:
         """Process an agent action and return updated observation."""
@@ -435,27 +383,32 @@ class TorchDebugEnvironment(MCPEnvironment):
 
         return self._current_obs
 
-    def _step_impl(
+    def step(
         self,
-        action: Action,
+        action: TorchDebugAction,
         timeout_s: Optional[float] = None,
         **kwargs: Any,
-    ) -> Observation:
-        """Handle non-MCP actions (fallback)."""
-        return Observation(
-            done=False,
-            reward=0.0,
-            metadata={
-                "error": f"Unknown action type: {type(action).__name__}. "
-                "Use ListToolsAction, CallToolAction, or the take_action MCP tool."
-            },
-        )
+    ) -> TorchDebugObservation:
+        """Execute a typed action in the environment."""
+        del timeout_s, kwargs
+        if not isinstance(action, TorchDebugAction):
+            raise TypeError(f"Expected TorchDebugAction, got {type(action)}")
+        return self._process_action(action)
 
     @property
-    def state(self) -> State:
+    def state(self) -> TorchDebugState:
         """Get the current environment state."""
-        return State(
-            episode_id=self._state.episode_id,
-            step_count=self._state.step_count,
-        )
+        return self._state
+
+    def get_task_info(self) -> Dict[str, Dict[str, Any]]:
+        """Return all available tasks and registered scenarios."""
+        all_scenarios = get_all_scenarios()
+        info: Dict[str, Dict[str, Any]] = {}
+        for task_id, scenarios_list in all_scenarios.items():
+            info[task_id] = {
+                "difficulty": TASK_DIFFICULTY_MAP.get(task_id, "unknown"),
+                "num_scenarios": len(scenarios_list),
+                "scenario_ids": [s.scenario_id for s in scenarios_list],
+            }
+        return info
 

@@ -1,18 +1,20 @@
-"""
-FastAPI application for the TorchDebug Environment.
+"""FastAPI application for the TorchDebug environment server."""
 
-Exposes TorchDebugEnvironment over HTTP and WebSocket endpoints
-using the OpenEnv create_app factory.
-"""
+from __future__ import annotations
 
-import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from openenv.core.env_server.http_server import create_app
+except ImportError:
+    from openenv.core import create_app
 
-from openenv.core import create_app, CallToolAction, CallToolObservation
+try:
+    from ..models import TorchDebugAction, TorchDebugObservation
+except ImportError:
+    from models import TorchDebugAction, TorchDebugObservation
 
+# Support both in-repo and standalone imports (OpenEnv reference pattern)
 try:
     from .torchdebug_environment import TorchDebugEnvironment
 except ImportError:
@@ -20,9 +22,9 @@ except ImportError:
 
 # create_app expects a callable factory (not a class instance)
 app = create_app(
-    env=TorchDebugEnvironment,  # Class is callable — creates new instance per session
-    action_cls=CallToolAction,
-    observation_cls=CallToolObservation,
+    env=TorchDebugEnvironment,
+    action_cls=TorchDebugAction,
+    observation_cls=TorchDebugObservation,
     env_name="torchdebug_env",
 )
 
@@ -37,10 +39,14 @@ def root():
     }
 
 
-def main():
-    """Entry point for direct execution."""
+def main(host: str = "0.0.0.0", port: int | None = None):
+    """Run the TorchDebug environment server with uvicorn."""
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    if port is None:
+        port = int(os.getenv("API_PORT", "8000"))
+
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
