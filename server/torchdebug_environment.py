@@ -83,6 +83,16 @@ MAX_STEPS = {
 
 STRICT_SCORE_EPS = 0.01
 
+
+def _strict_open_reward(value: float) -> float:
+    """Clamp any emitted reward to strict open interval (0, 1)."""
+    v = float(value)
+    if v <= 0.0:
+        return STRICT_SCORE_EPS
+    if v >= 1.0:
+        return 1.0 - STRICT_SCORE_EPS
+    return v
+
 AVAILABLE_ACTIONS = [
     "analyze_logs",
     "inspect_gradients",
@@ -218,7 +228,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=[],
             feedback="Environment initialized. Analyze the training run and diagnose the issue.",
             done=False,
-            reward=0.0,
+            reward=STRICT_SCORE_EPS,
         )
 
         return self._current_obs
@@ -380,7 +390,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=new_results,
             feedback=feedback,
             done=done,
-            reward=step_reward,
+            reward=_strict_open_reward(step_reward),
         )
 
         return self._current_obs

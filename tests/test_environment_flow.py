@@ -13,7 +13,7 @@ def test_reset_and_step_flow():
     obs = env.reset(task_id="basic_failures", scenario_id="easy_lr_too_high")
 
     assert obs.done is False
-    assert obs.reward == 0.0
+    assert 0.0 < obs.reward < 1.0
     assert obs.task_id == "easy_lr_too_high"
 
     o1 = env._process_action(TorchDebugAction(action_type="analyze_logs"))
@@ -34,7 +34,23 @@ def test_reset_and_step_flow():
         )
     )
     assert o3.done is True
-    assert 0.0 <= o3.reward <= 1.0
+    assert 0.0 < o3.reward < 1.0
+
+
+def test_all_emitted_rewards_are_strict_open_interval():
+    env = TorchDebugEnvironment()
+    obs = env.reset(task_id="basic_failures", scenario_id="easy_lr_too_high")
+    assert 0.0 < obs.reward < 1.0
+
+    # Use low-quality responses to hit edge paths that historically emitted 0.0
+    o1 = env._process_action(TorchDebugAction(action_type="analyze_logs"))
+    assert 0.0 < o1.reward < 1.0
+
+    o2 = env._process_action(TorchDebugAction(action_type="diagnose", diagnosis=""))
+    assert 0.0 < o2.reward < 1.0
+
+    o3 = env._process_action(TorchDebugAction(action_type="request_hint"))
+    assert 0.0 < o3.reward < 1.0
 
 
 def test_fixed_trajectory_is_deterministic():
