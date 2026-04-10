@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-04-10T20:51:30.059606+00:00",
+  "generated_at": "2026-04-10T21:11:06.842414+00:00",
   "status": "passed",
   "checks": {
     "openenv_validate": true,
     "local_smoke": true,
     "tests": true,
     "docker_smoke": true,
-    "baseline": true
+    "baseline": null
   },
   "options": {
     "docker": true,
-    "baseline": true,
+    "baseline": false,
     "skip_tests": false,
     "baseline_timeout": 1200,
     "docker_image": "torchdebug-env-local"
