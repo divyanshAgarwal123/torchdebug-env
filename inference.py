@@ -83,10 +83,29 @@ class TorchDebugClient:
             "fix_code": action.get("fix_code", ""),
             "parameters": action.get("parameters", {}),
         }
-        resp = self.session.post(f"{self.base_url}/step", json=action_payload, timeout=60)
+
+        # Preferred: typed action contract
+        step_payload = {"action": action_payload}
+        resp = self.session.post(f"{self.base_url}/step", json=step_payload, timeout=60)
+
+        # Backward compatibility: legacy CallToolAction contract
+        if resp.status_code == 422:
+            legacy_payload = {
+                "action": {
+                    "tool_name": "take_action",
+                    "arguments": action_payload,
+                }
+            }
+            resp = self.session.post(f"{self.base_url}/step", json=legacy_payload, timeout=60)
+
         resp.raise_for_status()
         data = resp.json()
         obs = data.get("observation", data)
+
+        # If legacy call-tool observation is returned, unwrap tool_result
+        if isinstance(obs, dict) and "tool_result" in obs and isinstance(obs.get("tool_result"), dict):
+            obs = obs["tool_result"]
+
         return {
             "observation": obs,
             "reward": data.get("reward", obs.get("reward", 0.0)),
@@ -237,11 +256,10 @@ def get_llm_action(client: OpenAI, observation: str, history: list) -> Dict:
         return action
 
     except json.JSONDecodeError:
-        # Fallback: try to extract action_type
-        print("[WARN] llm_json_parse_failed fallback=analyze_logs", file=sys.stderr)
+        # Fallback when model returns non-JSON
         return {"action_type": "analyze_logs"}
     except Exception as e:
-        print(f"[ERROR] llm_call_failed error={e}", file=sys.stderr)
+        del e
         return {"action_type": "analyze_logs"}
 
 
