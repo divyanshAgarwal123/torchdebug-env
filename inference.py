@@ -34,11 +34,15 @@ from openai import OpenAI
 
 # Environment server URL (default: local Docker)
 ENV_BASE_URL = os.environ.get("ENV_BASE_URL", "http://localhost:8000")
+ENV_NAME = "torchdebug_env"
 
 # LLM configuration
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4")
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# Optional (for docker-image based evaluation flows)
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 
 # =============================================================================
@@ -307,99 +311,114 @@ def choose_action_with_fallback(step_num: int, llm_action: Dict, observation_tex
     return llm_action
 
 
+def _format_action(action: Dict[str, Any]) -> str:
+    """Compact one-line action string for structured STEP logs."""
+    try:
+        return json.dumps(action, separators=(",", ":"), ensure_ascii=False)
+    except Exception:
+        return str(action).replace("\n", " ")
+
+
+def _format_error(error_value: Any) -> str:
+    """Format last_action_error field per validator requirements."""
+    if error_value is None or error_value == "":
+        return "null"
+    return str(error_value).replace("\n", " ")
+
+
 # =============================================================================
 # Main Evaluation Loop
 # =============================================================================
 
 def run_episode(
-    env_client: TorchDebugClient,
     llm_client: OpenAI,
     task_id: str,
     scenario_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run a single debugging episode."""
-    scenario = scenario_id or "random"
-    print(
-        f"[START] task={task_id} "
-        f"scenario={scenario} "
-        f"model={MODEL_NAME} "
-        f"api_base_url={API_BASE_URL} "
-        f"env_base_url={ENV_BASE_URL}",
-        flush=True,
-    )
-
-    # Reset environment
-    reset_data = env_client.reset(task_id=task_id, scenario_id=scenario_id)
-    obs_text = format_observation(reset_data)
-    history = []
+    """Run a single debugging episode with strict structured stdout logs."""
+    env_client = TorchDebugClient(ENV_BASE_URL)
+    rewards: list[float] = []
     done = False
-    total_reward = 0.0
+    success = False
     steps = 0
+    total_reward = 0.0
 
-    while not done and steps < 20:
-        steps += 1
+    print(f"[START] task={task_id} env={ENV_NAME} model={MODEL_NAME}", flush=True)
 
-        # Get LLM action
-        llm_action = get_llm_action(llm_client, obs_text, history)
-        action = choose_action_with_fallback(steps, llm_action, obs_text)
-        action_type = action.get("action_type", "analyze_logs")
+    try:
+        # Wait for environment to be ready
+        for _ in range(30):
+            if env_client.health():
+                break
+            time.sleep(2)
+        else:
+            raise RuntimeError("env_server_unreachable")
 
-        # Add to conversation history
-        history.append({"role": "assistant", "content": json.dumps(action)})
+        reset_data = env_client.reset(task_id=task_id, scenario_id=scenario_id)
+        obs_text = format_observation(reset_data)
+        history = []
 
-        # Step environment
-        step_data = env_client.step(action)
-        obs_metadata = step_data.get("observation", step_data)
-        reward = step_data.get("reward", obs_metadata.get("reward", 0.0))
-        if reward is None:
-            reward = 0.0
-        done = step_data.get("done", obs_metadata.get("done", False))
-        total_reward = reward  # Final reward replaces
+        while not done and steps < 20:
+            steps += 1
 
+            llm_action = get_llm_action(llm_client, obs_text, history)
+            action = choose_action_with_fallback(steps, llm_action, obs_text)
+
+            # Add to conversation history
+            history.append({"role": "assistant", "content": json.dumps(action)})
+
+            step_data = env_client.step(action)
+            obs_metadata = step_data.get("observation", step_data)
+            reward = step_data.get("reward", obs_metadata.get("reward", 0.0))
+            reward = float(0.0 if reward is None else reward)
+            done = bool(step_data.get("done", obs_metadata.get("done", False)))
+            total_reward = reward
+            rewards.append(reward)
+
+            error_value = _format_error(obs_metadata.get("last_action_error"))
+            action_str = _format_action(action)
+            print(
+                f"[STEP] step={steps} "
+                f"action={action_str} "
+                f"reward={reward:.2f} "
+                f"done={str(done).lower()} "
+                f"error={error_value}",
+                flush=True,
+            )
+
+            obs_text = format_observation(step_data)
+            history.append({"role": "user", "content": obs_text[:2000]})
+
+        success = done
+
+    except Exception as e:
+        print(f"[ERROR] episode_failed error={str(e).replace(chr(10), ' ')}", file=sys.stderr)
+    finally:
+        try:
+            env_client.close()
+        except Exception:
+            pass
+
+        rewards_str = ",".join(f"{r:.2f}" for r in rewards)
         print(
-            f"[STEP] task={task_id} "
-            f"scenario={scenario} "
-            f"step={steps} "
-            f"action={action_type} "
-            f"reward={float(reward):.6f} "
-            f"done={str(bool(done)).lower()}",
+            f"[END] success={str(success).lower()} "
+            f"steps={steps} "
+            f"rewards={rewards_str}",
             flush=True,
         )
 
-        # Format new observation
-        obs_text = format_observation(step_data)
-
-        history.append({"role": "user", "content": obs_text[:2000]})
-
-    print(
-        f"[END] task={task_id} "
-        f"scenario={scenario} "
-        f"score={float(total_reward):.6f} "
-        f"steps={steps}",
-        flush=True,
-    )
     return {
         "task_id": task_id,
         "scenario_id": scenario_id,
         "score": total_reward,
         "steps": steps,
+        "success": success,
     }
 
 
 def main():
     """Run the baseline evaluation across all tasks."""
-    # Create clients
-    env_client = TorchDebugClient(ENV_BASE_URL)
     llm_client = create_llm_client()
-
-    # Wait for environment to be ready
-    for _ in range(30):
-        if env_client.health():
-            break
-        time.sleep(2)
-    else:
-        print("[ERROR] env_server_unreachable", file=sys.stderr)
-        sys.exit(1)
 
     # Run one deterministic scenario from each required task (easy/medium/hard)
     tasks = [
@@ -409,12 +428,9 @@ def main():
     ]
 
     results = []
-    try:
-        for task_id, scenario_id in tasks:
-            result = run_episode(env_client, llm_client, task_id, scenario_id)
-            results.append(result)
-    finally:
-        env_client.close()
+    for task_id, scenario_id in tasks:
+        result = run_episode(llm_client, task_id, scenario_id)
+        results.append(result)
 
     total = 0.0
     by_task = collections.defaultdict(list)
@@ -442,11 +458,7 @@ def main():
             f,
             indent=2,
         )
-    print(
-        f"[END] task=summary score={float(avg):.6f} "
-        f"steps={len(results)} output_path={output_path}",
-        flush=True,
-    )
+    print(f"[INFO] summary average_score={avg:.2f} output_path={output_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
