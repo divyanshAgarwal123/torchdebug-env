@@ -160,7 +160,11 @@ VALIDATE_OUTPUT=$(cd "$REPO_DIR" && openenv validate . 2>&1) && VALIDATE_OK=true
 
 if [ "$VALIDATE_OK" = true ]; then
   pass "openenv validate passed"
-  [ -n "$VALIDATE_OUTPUT" ] && log "  $VALIDATE_OUTPUT"
+  if [ -n "$VALIDATE_OUTPUT" ]; then
+    log "  $VALIDATE_OUTPUT"
+  else
+    log "  openenv output: none"
+  fi
 else
   fail "openenv validate failed"
   printf "%s\n" "$VALIDATE_OUTPUT"
