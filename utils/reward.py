@@ -17,10 +17,10 @@ except ImportError:
 def _strict_open_unit(value: float) -> float:
     """Clamp score to strict open interval (0, 1)."""
     v = float(value)
-    if v <= 0.0:
-        return 1e-6
-    if v >= 1.0:
-        return 1.0 - 1e-6
+    if v <= 0.01:
+        return 0.01
+    if v >= 0.99:
+        return 0.99
     return v
 
 

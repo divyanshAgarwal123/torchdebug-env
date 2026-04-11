@@ -87,9 +87,9 @@ STRICT_SCORE_EPS = 0.01
 def _strict_open_reward(value: float) -> float:
     """Clamp any emitted reward to strict open interval (0, 1)."""
     v = float(value)
-    if v <= 0.0:
+    if v <= STRICT_SCORE_EPS:
         return STRICT_SCORE_EPS
-    if v >= 1.0:
+    if v >= 1.0 - STRICT_SCORE_EPS:
         return 1.0 - STRICT_SCORE_EPS
     return v
 

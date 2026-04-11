@@ -417,6 +417,13 @@ def _strict_open_score(value: float | int | None) -> float:
     return max(0.01, min(0.99, v))
 
 
+def _strict_open_average(values: list[float]) -> float:
+    """Compute a strict-open-safe average for validator-facing outputs."""
+    if not values:
+        return 0.01
+    return _strict_open_score(sum(values) / len(values))
+
+
 # =============================================================================
 # Main Evaluation Loop
 # =============================================================================
@@ -461,7 +468,7 @@ def run_episode(
             step_data = env_client.step(action)
             obs_metadata = step_data.get("observation", step_data)
             reward = step_data.get("reward", obs_metadata.get("reward", 0.0))
-            reward = float(0.0 if reward is None else reward)
+            reward = _strict_open_score(reward)
             done = bool(step_data.get("done", obs_metadata.get("done", False)))
             total_reward = reward
             rewards.append(reward)
@@ -529,7 +536,7 @@ def main():
         total += r['score']
         by_task[r["task_id"]].append(r["score"])
 
-    avg = total / len(results) if results else 0
+    avg = _strict_open_average([r["score"] for r in results])
 
     # Save results
     output_path = "outputs/evals/baseline_results.json"
@@ -540,7 +547,7 @@ def main():
                 "results": results,
                 "average_score": avg,
                 "task_scores": {
-                    task: (sum(scores) / len(scores) if scores else 0.0)
+                    task: _strict_open_average(scores)
                     for task, scores in by_task.items()
                 },
                 "model": MODEL_NAME,
@@ -554,3 +561,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,0 +1,18 @@
+[START] task=basic_failures env=torchdebug_env model=gpt-4
+[STEP] step=1 action={"action_type":"analyze_logs"} reward=0.05 done=false error=null
+[STEP] step=2 action={"action_type":"inspect_gradients"} reward=0.05 done=false error=null
+[STEP] step=3 action={"action_type":"diagnose","diagnosis":"Learning rate is too high and causes exploding gradients with inf/nan loss."} reward=0.20 done=false error=null
+[STEP] step=4 action={"action_type":"prescribe_fix","fix_description":"Reduce learning rate to a stable value like 0.01 and retry training.","fix_code":"optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)"} reward=0.95 done=true error=null
+[END] success=true steps=4 rewards=0.05,0.05,0.20,0.95
+[START] task=performance_issues env=torchdebug_env model=gpt-4
+[STEP] step=1 action={"action_type":"analyze_logs"} reward=0.05 done=false error=null
+[STEP] step=2 action={"action_type":"inspect_data_pipeline"} reward=0.05 done=false error=null
+[STEP] step=3 action={"action_type":"diagnose","diagnosis":"There is data leakage between train and validation due to incorrect splitting and augmentation applied to validation data."} reward=0.20 done=false error=null
+[STEP] step=4 action={"action_type":"prescribe_fix","fix_description":"Split by patient/group IDs and use separate transforms with no augmentation for validation.","fix_code":"train_dataset = ...train_transform\nval_dataset = ...val_transform"} reward=0.83 done=true error=null
+[END] success=true steps=4 rewards=0.05,0.05,0.20,0.83
+[START] task=subtle_bugs env=torchdebug_env model=gpt-4
+[STEP] step=1 action={"action_type":"analyze_logs"} reward=0.05 done=false error=null
+[STEP] step=2 action={"action_type":"inspect_gradients"} reward=0.05 done=false error=null
+[STEP] step=3 action={"action_type":"diagnose","diagnosis":"DDP is synchronizing gradients on every backward without no_sync during accumulation, causing communication overhead and poor scaling."} reward=0.20 done=false error=null
+[STEP] step=4 action={"action_type":"prescribe_fix","fix_description":"Use model.no_sync() for non-boundary accumulation steps and tune learning rate for effective batch size.","fix_code":"with model.no_sync():\n    loss.backward()"} reward=0.97 done=true error=null
+[END] success=true steps=4 rewards=0.05,0.05,0.20,0.97
