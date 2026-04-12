@@ -67,7 +67,8 @@ class TorchDebugClient:
         self.env = None
         try:
             self.env = TorchDebugEnv(base_url=self.base_url).sync()
-        except Exception:
+        except Exception as e:
+            print(f"[WARN] SDK client init failed, using HTTP fallback: {e}", file=sys.stderr)
             self.env = None
 
     def reset(self, task_id: str = "basic_failures", scenario_id: Optional[str] = None) -> Dict:
@@ -81,8 +82,8 @@ class TorchDebugClient:
                     "reward": result.reward if result.reward is not None else obs.get("reward", 0.0),
                     "done": result.done,
                 }
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] SDK reset failed, using HTTP fallback: {e}", file=sys.stderr)
 
         return self._reset_http(task_id=task_id, scenario_id=scenario_id)
 
@@ -129,8 +130,8 @@ class TorchDebugClient:
                     "reward": result.reward if result.reward is not None else obs.get("reward", 0.0),
                     "done": result.done,
                 }
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] SDK step failed, using HTTP fallback: {e}", file=sys.stderr)
 
         return self._step_http(action_payload)
 
