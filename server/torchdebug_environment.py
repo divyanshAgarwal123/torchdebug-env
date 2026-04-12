@@ -85,12 +85,14 @@ STRICT_SCORE_EPS = 0.01
 
 
 def _strict_open_reward(value: float) -> float:
-    """Clamp any emitted reward to strict open interval (0, 1)."""
+    """Clamp terminal reward to (0, 0.95].
+    Upper cap at 0.95 leaves room for up to 20 intermediate steps at 0.001
+    so that sum(all_rewards) stays safely below 1.0."""
     v = float(value)
     if v <= STRICT_SCORE_EPS:
         return STRICT_SCORE_EPS
-    if v >= 1.0 - STRICT_SCORE_EPS:
-        return 1.0 - STRICT_SCORE_EPS
+    if v >= 0.95:
+        return 0.95
     return v
 
 AVAILABLE_ACTIONS = [
@@ -228,7 +230,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=[],
             feedback="Environment initialized. Analyze the training run and diagnose the issue.",
             done=False,
-            reward=0.0,  # no reward on reset; task score = sum of step rewards
+            reward=0.001,  # tiny positive; validator rejects exact 0.0
         )
 
         return self._current_obs
@@ -383,7 +385,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
         if done:
             emitted_reward = _strict_open_reward(step_reward)
         else:
-            emitted_reward = 0.0  # zero for intermediates; task score = sum
+            emitted_reward = 0.001  # tiny positive value; validator rejects 0.0
 
         # Build updated observation
         self._current_obs = TorchDebugObservation(
