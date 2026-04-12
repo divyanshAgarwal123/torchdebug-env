@@ -50,8 +50,8 @@ try:
         r = result.get("reward")
         if r is not None:
             r = float(r)
-            if r <= 0.0:
-                r = 0.01
+            if r < 0.0:
+                r = 0.0
             elif r >= 1.0:
                 r = 0.99
             result["reward"] = r
@@ -81,10 +81,11 @@ _env_instance: TorchDebugEnvironment | None = None
 
 
 def _clamp_reward(v: float) -> float:
-    """Final safety net: ensure reward is strictly in (0, 1)."""
-    v = float(v) if v is not None else 0.01
-    if v <= 0.0:
-        return 0.01
+    """Final safety net: ensure reward is in [0, 1).
+    0.0 is valid for intermediate steps; only terminal scores need > 0."""
+    v = float(v) if v is not None else 0.0
+    if v < 0.0:
+        return 0.0
     if v >= 1.0:
         return 0.99
     return v

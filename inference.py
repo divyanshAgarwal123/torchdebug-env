@@ -468,10 +468,9 @@ def run_episode(
 
             step_data = env_client.step(action)
             obs_metadata = step_data.get("observation", step_data)
-            reward = step_data.get("reward", obs_metadata.get("reward", 0.0))
-            reward = _strict_open_score(reward)
+            reward = float(step_data.get("reward", obs_metadata.get("reward", 0.0)))
             done = bool(step_data.get("done", obs_metadata.get("done", False)))
-            total_reward = reward
+            total_reward = reward  # track last reward for final score
             rewards.append(reward)
 
             error_value = _format_error(obs_metadata.get("last_action_error"))

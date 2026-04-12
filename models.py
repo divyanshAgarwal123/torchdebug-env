@@ -110,10 +110,11 @@ class TorchDebugObservation(Observation):
     @field_validator("reward", mode="before")
     @classmethod
     def clamp_reward(cls, v: Any) -> float:
-        """Ensure reward is strictly in the open interval (0, 1)."""
-        v = float(v) if v is not None else 0.01
-        if v <= 0.0:
-            return 0.01
+        """Ensure reward is in [0, 1).  0.0 is allowed for intermediate steps;
+        only the terminal step carries the real score (clamped to [0.01, 0.99])."""
+        v = float(v) if v is not None else 0.0
+        if v < 0.0:
+            return 0.0
         if v >= 1.0:
             return 0.99
         return v

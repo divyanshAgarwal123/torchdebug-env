@@ -228,7 +228,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=[],
             feedback="Environment initialized. Analyze the training run and diagnose the issue.",
             done=False,
-            reward=STRICT_SCORE_EPS,
+            reward=0.0,  # no reward on reset; task score = sum of step rewards
         )
 
         return self._current_obs
@@ -373,6 +373,18 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             feedback += f"\n\n⏰ Step limit reached ({max_steps} steps). Final score: {final_score:.2f}/1.0"
             feedback += f"\n\nGround truth: {scenario.root_cause_description}"
 
+        # ---------------------------------------------------------------
+        # Reward emission strategy:
+        # The OpenEnv validator computes the task score as the SUM of all
+        # step rewards.  To keep the total in the strict-open (0, 1)
+        # interval, only the terminal step carries the real episode score;
+        # all intermediate steps emit the minimum valid reward (~0).
+        # ---------------------------------------------------------------
+        if done:
+            emitted_reward = _strict_open_reward(step_reward)
+        else:
+            emitted_reward = 0.0  # zero for intermediates; task score = sum
+
         # Build updated observation
         self._current_obs = TorchDebugObservation(
             task_id=scenario.scenario_id,
@@ -390,7 +402,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=new_results,
             feedback=feedback,
             done=done,
-            reward=_strict_open_reward(step_reward),
+            reward=emitted_reward,
         )
 
         return self._current_obs
