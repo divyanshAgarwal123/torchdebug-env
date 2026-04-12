@@ -230,7 +230,7 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             inspection_results=[],
             feedback="Environment initialized. Analyze the training run and diagnose the issue.",
             done=False,
-            reward=0.001,  # tiny positive; validator rejects exact 0.0
+            reward=0.01,  # formats as "0.01" with :.2f
         )
 
         return self._current_obs
@@ -377,15 +377,20 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
 
         # ---------------------------------------------------------------
         # Reward emission strategy:
-        # The OpenEnv validator computes the task score as the SUM of all
-        # step rewards.  To keep the total in the strict-open (0, 1)
-        # interval, only the terminal step carries the real episode score;
-        # all intermediate steps emit the minimum valid reward (~0).
+        # The OpenEnv validator checks every individual reward is in (0, 1)
+        # AND that the task score (sum of rewards) is also in (0, 1).
+        #
+        # Intermediate: emit 0.01 (NOT 0.001, because :.2f turns 0.001
+        #   into "0.00" which the validator reads as 0.0 → FAILS).
+        # Terminal: emit real score, capped so sum stays < 1.0.
+        #   max_terminal = 0.99 - (n_intermediates × 0.01)
         # ---------------------------------------------------------------
         if done:
-            emitted_reward = _strict_open_reward(step_reward)
+            n_intermediates = max(0, self._state.step_count - 1)
+            max_terminal = max(0.01, 0.99 - n_intermediates * 0.01)
+            emitted_reward = min(_strict_open_reward(step_reward), max_terminal)
         else:
-            emitted_reward = 0.001  # tiny positive value; validator rejects 0.0
+            emitted_reward = 0.01  # formats as "0.01" with :.2f → > 0 ✓
 
         # Build updated observation
         self._current_obs = TorchDebugObservation(

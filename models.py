@@ -111,9 +111,9 @@ class TorchDebugObservation(Observation):
     @classmethod
     def clamp_reward(cls, v: Any) -> float:
         """Ensure every reward is strictly in (0, 1). The validator rejects 0.0."""
-        v = float(v) if v is not None else 0.001
+        v = float(v) if v is not None else 0.01
         if v <= 0.0:
-            return 0.001
+            return 0.01
         if v >= 1.0:
             return 0.95
         return v
