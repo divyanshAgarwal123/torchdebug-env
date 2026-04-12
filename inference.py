@@ -469,12 +469,8 @@ def run_episode(
             step_data = env_client.step(action)
             obs_metadata = step_data.get("observation", step_data)
             reward = float(step_data.get("reward", obs_metadata.get("reward", 0.01)))
-            # Safety clamp: validator rejects reward=0.00 (exactly 0.0) or >= 1.0
-            # Using 0.01 floor because :.2f format turns 0.001 into "0.00"
-            if reward <= 0.0:
-                reward = 0.01
-            elif reward >= 1.0:
-                reward = 0.95
+            # Safety net: ensure reward stays in strict (0, 1)
+            reward = max(0.01, min(0.95, reward))
             done = bool(step_data.get("done", obs_metadata.get("done", False)))
             total_reward = reward
             rewards.append(reward)

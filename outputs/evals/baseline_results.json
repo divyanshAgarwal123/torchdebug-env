@@ -28,6 +28,6 @@
     "performance_issues": 0.8260000000000001,
     "subtle_bugs": 0.95
   },
-  "model": "test-model",
+  "model": "test",
   "api_base_url": "http://localhost:99999"
 }

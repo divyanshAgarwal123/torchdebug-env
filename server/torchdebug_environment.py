@@ -120,7 +120,12 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
     - basic_failures (easy): Common crashes and obvious bugs
     - performance_issues (medium): Subtle performance problems
     - subtle_bugs (hard): Compound bugs requiring deep PyTorch knowledge
+
+    Supports concurrent WebSocket sessions for parallel evaluation.
     """
+
+    # Enable concurrent sessions — each WebSocket connection gets its own instance
+    SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
     def __init__(self):
         """Initialize environment state."""

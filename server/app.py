@@ -1,14 +1,28 @@
-"""FastAPI application for the TorchDebug environment server."""
+"""
+FastAPI application for the TorchDebug environment server.
+
+This module creates an HTTP server that exposes TorchDebugEnvironment
+over HTTP and WebSocket endpoints, compatible with OpenEnv EnvClient.
+
+Usage:
+    # Development:
+    uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
+
+    # Production:
+    uvicorn server.app:app --host 0.0.0.0 --port 8000
+
+    # Via OpenEnv CLI:
+    uv run --project . server
+"""
 
 from __future__ import annotations
 
 import logging
 import os
-import sys
 import threading
 from typing import Any, Dict
 
-from fastapi import FastAPI, Request
+from fastapi import Request
 
 try:
     from openenv.core.env_server.http_server import create_app
@@ -20,7 +34,6 @@ try:
 except ImportError:
     from models import TorchDebugAction, TorchDebugObservation
 
-# Support both in-repo and standalone imports (OpenEnv reference pattern)
 try:
     from .torchdebug_environment import TorchDebugEnvironment
 except ImportError:
@@ -28,52 +41,38 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# create_app expects a callable factory (not a class instance)
+
+# ---------------------------------------------------------------------------
+# Factory function (reference pattern from REPL/Calendar envs)
+# ---------------------------------------------------------------------------
+
+def create_torchdebug_environment() -> TorchDebugEnvironment:
+    """Factory that creates a TorchDebugEnvironment instance.
+
+    This follows the OpenEnv reference pattern where create_app receives
+    a callable factory rather than a class directly.
+    """
+    return TorchDebugEnvironment()
+
+
+# Create the app via the OpenEnv framework
 app = create_app(
-    env=TorchDebugEnvironment,
-    action_cls=TorchDebugAction,
-    observation_cls=TorchDebugObservation,
+    create_torchdebug_environment,
+    TorchDebugAction,
+    TorchDebugObservation,
     env_name="torchdebug_env",
+    max_concurrent_envs=4,
 )
 
-# ---------------------------------------------------------------------------
-# Monkey-patch the framework's serialize_observation so that rewards are
-# clamped to (0, 1) even on the WebSocket path managed by the framework.
-# ---------------------------------------------------------------------------
-try:
-    from openenv.core.env_server import serialization as _ser_mod
-
-    _orig_serialize = _ser_mod.serialize_observation
-
-    def _patched_serialize(observation):  # type: ignore[override]
-        result = _orig_serialize(observation)
-        r = result.get("reward")
-        if r is not None:
-            r = float(r)
-            if r <= 0.0:
-                r = 0.01
-            elif r >= 1.0:
-                r = 0.95
-            result["reward"] = r
-        return result
-
-    _ser_mod.serialize_observation = _patched_serialize
-except Exception:
-    pass  # If patching fails, our other layers still protect
 
 # ---------------------------------------------------------------------------
 # Stateful HTTP overrides for /reset and /step
 # ---------------------------------------------------------------------------
-# The OpenEnv framework's REST endpoints are stateless: each HTTP request
-# creates (and destroys) a fresh environment instance.  This means an
-# HTTP POST /step after POST /reset runs against a *new* env that was
-# never reset — producing "Error: Call reset() first." with reward 0.01.
+# The OpenEnv framework's HTTP endpoints are stateless (each request creates
+# a fresh env). For HTTP-based clients (inference.py, validators), we need
+# a shared env that persists between /reset and /step calls.
 #
-# For multi-step episodes over plain HTTP (used by Phase-2 validators and
-# by inference.py's HTTP fallback), we need a shared environment that
-# persists between /reset and subsequent /step calls.
-#
-# WebSocket (/ws) sessions managed by the framework are unaffected.
+# WebSocket sessions managed by the framework are unaffected.
 # ---------------------------------------------------------------------------
 
 _env_lock = threading.Lock()
@@ -81,7 +80,7 @@ _env_instance: TorchDebugEnvironment | None = None
 
 
 def _clamp_reward(v: float) -> float:
-    """Final safety net: every reward must be strictly in (0, 1)."""
+    """Ensure every reward is strictly in (0, 1)."""
     v = float(v) if v is not None else 0.01
     if v <= 0.0:
         return 0.01
@@ -91,22 +90,25 @@ def _clamp_reward(v: float) -> float:
 
 
 def _serialize_obs(obs: TorchDebugObservation) -> Dict[str, Any]:
-    """Serialize observation to match openenv-core's response format."""
+    """Serialize observation to match OpenEnv response format."""
     obs_dict = obs.model_dump(exclude={"reward", "done", "metadata"})
-    return {"observation": obs_dict, "reward": _clamp_reward(obs.reward), "done": obs.done}
+    return {
+        "observation": obs_dict,
+        "reward": _clamp_reward(obs.reward),
+        "done": obs.done,
+    }
 
 
-# Remove the framework's stateless /reset and /step routes so ours take effect.
+# Remove the framework's stateless /reset and /step so ours take effect.
 app.router.routes = [
-    r
-    for r in app.router.routes
+    r for r in app.router.routes
     if not (hasattr(r, "path") and r.path in ("/reset", "/step"))
 ]
 
 
 @app.post("/reset")
 async def stateful_reset(request: Request):
-    """Reset: create a fresh env, run reset(), keep instance for later /step."""
+    """Reset: create a fresh env, run reset(), keep instance for /step."""
     global _env_instance
     try:
         body = await request.json()
@@ -173,7 +175,8 @@ def root():
     return {
         "name": "torchdebug_env",
         "status": "ok",
-        "message": "TorchDebug OpenEnv is running. Use /health, /reset, /step, /state, /schema.",
+        "message": "TorchDebug OpenEnv — PyTorch debugging environment. "
+                   "Use /health, /reset, /step, /state, /schema, /ws.",
     }
 
 
