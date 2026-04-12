@@ -8,7 +8,7 @@ Defines typed Action, Observation, and State models for the OpenEnv spec.
 """
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 try:
     from openenv.core.env_server.types import Action, Observation, State
@@ -105,7 +105,18 @@ class TorchDebugObservation(Observation):
     )
 
     done: bool = Field(default=False, description="Whether the episode has ended")
-    reward: float = Field(default=0.0, description="Reward from last action")
+    reward: float = Field(default=0.01, description="Reward from last action")
+
+    @field_validator("reward", mode="before")
+    @classmethod
+    def clamp_reward(cls, v: Any) -> float:
+        """Ensure reward is strictly in the open interval (0, 1)."""
+        v = float(v) if v is not None else 0.01
+        if v <= 0.0:
+            return 0.01
+        if v >= 1.0:
+            return 0.99
+        return v
 
 
 # =============================================================================

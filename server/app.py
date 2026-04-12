@@ -37,6 +37,31 @@ app = create_app(
 )
 
 # ---------------------------------------------------------------------------
+# Monkey-patch the framework's serialize_observation so that rewards are
+# clamped to (0, 1) even on the WebSocket path managed by the framework.
+# ---------------------------------------------------------------------------
+try:
+    from openenv.core.env_server import serialization as _ser_mod
+
+    _orig_serialize = _ser_mod.serialize_observation
+
+    def _patched_serialize(observation):  # type: ignore[override]
+        result = _orig_serialize(observation)
+        r = result.get("reward")
+        if r is not None:
+            r = float(r)
+            if r <= 0.0:
+                r = 0.01
+            elif r >= 1.0:
+                r = 0.99
+            result["reward"] = r
+        return result
+
+    _ser_mod.serialize_observation = _patched_serialize
+except Exception:
+    pass  # If patching fails, our other layers still protect
+
+# ---------------------------------------------------------------------------
 # Stateful HTTP overrides for /reset and /step
 # ---------------------------------------------------------------------------
 # The OpenEnv framework's REST endpoints are stateless: each HTTP request
@@ -55,10 +80,20 @@ _env_lock = threading.Lock()
 _env_instance: TorchDebugEnvironment | None = None
 
 
+def _clamp_reward(v: float) -> float:
+    """Final safety net: ensure reward is strictly in (0, 1)."""
+    v = float(v) if v is not None else 0.01
+    if v <= 0.0:
+        return 0.01
+    if v >= 1.0:
+        return 0.99
+    return v
+
+
 def _serialize_obs(obs: TorchDebugObservation) -> Dict[str, Any]:
     """Serialize observation to match openenv-core's response format."""
     obs_dict = obs.model_dump(exclude={"reward", "done", "metadata"})
-    return {"observation": obs_dict, "reward": obs.reward, "done": obs.done}
+    return {"observation": obs_dict, "reward": _clamp_reward(obs.reward), "done": obs.done}
 
 
 # Remove the framework's stateless /reset and /step routes so ours take effect.
