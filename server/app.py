@@ -73,7 +73,10 @@ app.router.routes = [
 async def stateful_reset(request: Request):
     """Reset: create a fresh env, run reset(), keep instance for later /step."""
     global _env_instance
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
 
     task_id = body.get("task_id", "basic_failures")
     scenario_id = body.get("scenario_id")
@@ -99,7 +102,10 @@ async def stateful_reset(request: Request):
 async def stateful_step(request: Request):
     """Step: run action on the shared env from the last /reset."""
     global _env_instance
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
     action_data = body.get("action", body)
 
     # Unwrap legacy CallToolAction wrapper if present
