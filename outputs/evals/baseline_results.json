@@ -29,5 +29,5 @@
     "subtle_bugs": 0.9720000000000001
   },
   "model": "gpt-4",
-  "api_base_url": "http://127.0.0.1:9"
+  "api_base_url": "https://api.openai.com/v1"
 }
