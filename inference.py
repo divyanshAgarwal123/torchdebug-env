@@ -504,8 +504,12 @@ def run_episode(
             pass
 
         rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+        # Task score = clamped terminal reward (the meaningful episode score)
+        task_score = _strict_open_score(total_reward)
         print(
-            f"[END] success={str(success).lower()} "
+            f"[END] task={task_id} "
+            f"score={task_score:.2f} "
+            f"success={str(success).lower()} "
             f"steps={steps} "
             f"rewards={rewards_str}",
             flush=True,

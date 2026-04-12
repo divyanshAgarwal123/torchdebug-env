@@ -17,17 +17,17 @@
     {
       "task_id": "subtle_bugs",
       "scenario_id": "hard_ddp_grad_accum",
-      "score": 0.9720000000000001,
+      "score": 0.95,
       "steps": 4,
       "success": true
     }
   ],
-  "average_score": 0.9146666666666667,
+  "average_score": 0.9073333333333334,
   "task_scores": {
     "basic_failures": 0.9460000000000002,
     "performance_issues": 0.8260000000000001,
-    "subtle_bugs": 0.9720000000000001
+    "subtle_bugs": 0.95
   },
-  "model": "gpt-4",
-  "api_base_url": "https://api.openai.com/v1"
+  "model": "test-model",
+  "api_base_url": "http://localhost:99999"
 }

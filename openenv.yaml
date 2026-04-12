@@ -1,33 +1,6 @@
 spec_version: 1
 name: torchdebug_env
-description: Real-world PyTorch training run debugging environment with progressive tasks and deterministic graders.
-version: 1.0.0
 type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
-
-tasks:
-  - id: basic_failures
-    name: "Basic Training Failures"
-    description: "Diagnose and fix common PyTorch training failures such as exploding gradients, wrong loss functions, and learning rate issues."
-    difficulty: easy
-    grader: "graders:grade_basic_failures"
-
-  - id: performance_issues
-    name: "Performance & Data Issues"
-    description: "Identify performance bottlenecks, data leakage, and pipeline problems in PyTorch training setups."
-    difficulty: medium
-    grader: "graders:grade_performance_issues"
-
-  - id: subtle_bugs
-    name: "Subtle & Distributed Bugs"
-    description: "Diagnose advanced issues like DDP gradient accumulation bugs, device placement errors, and mixed precision problems."
-    difficulty: hard
-    grader: "graders:grade_subtle_bugs"
-
-tags:
-  - openenv
-  - pytorch
-  - debugging
-  - reinforcement-learning
