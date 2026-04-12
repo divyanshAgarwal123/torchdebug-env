@@ -3,6 +3,9 @@ TorchDebug Environment implementation.
 
 A real-world OpenEnv environment that simulates debugging broken PyTorch
 training runs. The agent must investigate, diagnose, and prescribe fixes.
+
+Rewards are computed via the TorchDebugRubric (OpenEnv RFC 004) which combines
+diagnosis accuracy, fix quality, and investigation process scoring.
 """
 
 import math
@@ -40,6 +43,7 @@ try:
         compute_episode_score,
         get_hint,
     )
+    from ..rubrics import TorchDebugRubric
 except ImportError:
     from models import (
         TorchDebugObservation,
@@ -67,6 +71,7 @@ except ImportError:
         compute_episode_score,
         get_hint,
     )
+    from rubrics import TorchDebugRubric
 
 # Task ID to difficulty mapping
 TASK_DIFFICULTY_MAP = {
@@ -127,9 +132,15 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
     # Enable concurrent sessions — each WebSocket connection gets its own instance
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
-    def __init__(self):
-        """Initialize environment state."""
+    def __init__(self, rubric: TorchDebugRubric | None = None):
+        """Initialize environment with optional rubric for reward computation.
+
+        Args:
+            rubric: A TorchDebugRubric instance (RFC 004). Defaults to the
+                    standard composite rubric if not provided.
+        """
         super().__init__()
+        self._rubric = rubric or TorchDebugRubric()
         self._state = TorchDebugState(episode_id=str(uuid4()), step_count=0)
         self._current_scenario: Optional[BugScenario] = None
         self._current_obs: Optional[TorchDebugObservation] = None
@@ -192,6 +203,17 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
         self._current_task_id = scenario.task_id
         difficulty = TASK_DIFFICULTY_MAP[scenario.task_id]
         max_steps = MAX_STEPS[difficulty]
+
+        # Initialize rubric with ground-truth keywords for this scenario
+        self._rubric.reset()
+        if hasattr(self._rubric.diagnosis, 'set_keywords'):
+            self._rubric.diagnosis.set_keywords(
+                scenario.diagnosis_keywords
+            )
+        if hasattr(self._rubric.fix_quality, 'set_expected'):
+            self._rubric.fix_quality.set_expected(
+                scenario.fix_keywords
+            )
 
         # Reset state
         self._state = TorchDebugState(
@@ -397,7 +419,15 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
         else:
             emitted_reward = 0.01  # formats as "0.01" with :.2f → > 0 ✓
 
-        # Build updated observation
+        # Build updated observation with rubric metadata
+        metadata = {
+            "agent_diagnosis": getattr(action, 'diagnosis', None) or "",
+            "agent_fix_code": getattr(action, 'fix_code', None) or "",
+            "rubric_diagnosis_score": self._diagnosis_score,
+            "rubric_fix_score": self._fix_score,
+            "rubric_investigation_reward": self._investigation_reward,
+        }
+
         self._current_obs = TorchDebugObservation(
             task_id=scenario.scenario_id,
             task_description=scenario.description,
@@ -415,7 +445,14 @@ class TorchDebugEnvironment(Environment[TorchDebugAction, TorchDebugObservation,
             feedback=feedback,
             done=done,
             reward=emitted_reward,
+            metadata=metadata,
         )
+
+        # Compute rubric reward (RFC 004) — used for RL training signal
+        try:
+            self._rubric.forward(action, self._current_obs)
+        except Exception:
+            pass  # Rubric failure should never block env operation
 
         return self._current_obs
 

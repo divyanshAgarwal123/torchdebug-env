@@ -17,6 +17,7 @@ Usage:
 
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 import threading
@@ -36,8 +37,10 @@ except ImportError:
 
 try:
     from .torchdebug_environment import TorchDebugEnvironment
+    from .gradio_ui import build_torchdebug_gradio_app
 except ImportError:
     from server.torchdebug_environment import TorchDebugEnvironment
+    from server.gradio_ui import build_torchdebug_gradio_app
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +58,29 @@ def create_torchdebug_environment() -> TorchDebugEnvironment:
     return TorchDebugEnvironment()
 
 
-# Create the app via the OpenEnv framework
-app = create_app(
-    create_torchdebug_environment,
-    TorchDebugAction,
-    TorchDebugObservation,
-    env_name="torchdebug_env",
-    max_concurrent_envs=4,
-)
+# Create the app with Gradio UI (matching REPL env pattern)
+_sig = inspect.signature(create_app)
+if "gradio_builder" in _sig.parameters:
+    app = create_app(
+        create_torchdebug_environment,
+        TorchDebugAction,
+        TorchDebugObservation,
+        env_name="torchdebug_env",
+        max_concurrent_envs=4,
+        gradio_builder=build_torchdebug_gradio_app,
+    )
+else:
+    logger.warning(
+        "Installed openenv-core does not support gradio_builder; "
+        "interactive Gradio UI will not be available."
+    )
+    app = create_app(
+        create_torchdebug_environment,
+        TorchDebugAction,
+        TorchDebugObservation,
+        env_name="torchdebug_env",
+        max_concurrent_envs=4,
+    )
 
 
 # ---------------------------------------------------------------------------
